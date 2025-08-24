@@ -1,7 +1,6 @@
 // /apps/web/src/app/api/health/route.ts
 // साधारण health-check API — Postman/ThunderClient से टेस्ट करने के लिए
 import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
 
 type HealthPayload = {
   status: "ok";
@@ -14,7 +13,7 @@ type HealthPayload = {
  * - सर्वर चालू है या नहीं बताने के लिए
  * - Postman में GET करके JSON response और security headers चेक करें
  */
-export async function GET(_req: NextRequest) {
+export async function GET() {
   const payload: HealthPayload = {
     status: "ok",
     ts: Date.now(),

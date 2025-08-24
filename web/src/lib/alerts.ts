@@ -17,8 +17,6 @@ export interface AlertPayload {
   meta?: Record<string, any>;
 }
 
-
-
 // Transporter (nodemailer) config — only used if SMTP env vars set
 const SMTP_HOST = process.env.SMTP_HOST || "";
 const SMTP_PORT = Number(process.env.SMTP_PORT || "0");

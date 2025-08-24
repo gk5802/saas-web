@@ -77,6 +77,26 @@ export function parseIntegerSafe(raw: string): number | null {
   return Math.trunc(n);
 }
 
+/**
+ * 🛡️ Email Validator
+ * Hindi: यह function check करता है कि email सही format में है या नहीं
+ */
+export function validateEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+}
+
+/**
+ * 🛡️ Password Validator
+ * Hindi: यह function check करता है कि password strong है या नहीं
+ * Rule: कम से कम 8 characters, एक uppercase, एक lowercase, एक digit
+ */
+export function validatePassword(password: string): boolean {
+  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+  return passwordRegex.test(password);
+}
+
+
 export const validators = {
   normalizeInput,
   enforceMaxLength,
@@ -86,4 +106,6 @@ export const validators = {
   validatePositiveInt,
   isValidAmount,
   parseIntegerSafe,
+  validateEmail,
+  validatePassword,
 };

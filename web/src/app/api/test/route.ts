@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { validators } from "@/lib/validators";
-import { sanitizers } from "@/lib/sanitizers";
+// import { sanitizers } from "@/lib/sanitizers";
 import { cryptoUtils } from "@/lib/crypto";
 
 type SignupBody = {
@@ -51,8 +51,8 @@ export async function POST(req: NextRequest) {
       );
 
     // Sanitization
-    const emailSafe = sanitizers.sanitizeForDB(email);
-    const usernameSafe = sanitizers.sanitizeForDB(username, 64);
+    // const emailSafe = sanitizers.sanitizeForDB(email);
+    // const usernameSafe = sanitizers.sanitizeForDB(username, 64);
 
     // Hash password (scrypt)
     const hash = await cryptoUtils.hashPassword(password);

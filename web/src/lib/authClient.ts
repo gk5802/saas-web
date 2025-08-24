@@ -5,6 +5,7 @@
 import crypto from "crypto";
 import { verifyHmac, signHmac } from "./crypto";
 import { validateUUID } from "./validators";
+import { randomUUID } from "crypto";
 
 
 export type UserRole =
@@ -20,6 +21,7 @@ export interface SessionTokenPayload {
   exp: number; // expiry समय (epoch seconds)
   iat: number; // issued at
   jti: string; // token ID (revocation के लिए)
+  sessionId: string; // session ID (वैकल्पिक)
 }
 
 // memory में revoked टोकन store करने के लिए (dev mode)
@@ -98,7 +100,53 @@ export const authClient = {
       exp: now + ttlSeconds,
       iat: now,
       jti: crypto.randomUUID(),
+      sessionId: ""
     };
     return signHmac(payload, SESSION_HMAC_SECRET);
   },
 };
+
+// ✅ Memory में sessions (later DB से होगा)
+const sessions: Record<string, SessionTokenPayload> = {};
+
+/**
+ * 🟢 नया session बनाना
+ * हिंदी: userId से नया session token generate करता है
+ */
+export function createSession(userId: string): string {
+  const sessionId = randomUUID();
+  const iat = Math.floor(Date.now() / 1000);
+  const exp = iat + 60 * 60; // 1 घंटे का expiry
+
+  const payload: SessionTokenPayload = {
+    userId, sessionId, iat, exp,
+    role: "super-admin",
+    jti: ""
+  };
+
+  const token = signHmac(JSON.stringify(payload), process.env.SESSION_HMAC_SECRET!);
+
+  sessions[sessionId] = payload;
+  return token;
+}
+
+/**
+ * 🟢 Session verify करना
+ */
+export function verifySession(token: string): SessionTokenPayload {
+  const decoded = verifyHmac(token, process.env.SESSION_HMAC_SECRET!);
+  const payload: SessionTokenPayload = JSON.parse(decoded);
+
+  if (payload.exp < Math.floor(Date.now() / 1000)) {
+    throw new Error("Session expired");
+  }
+
+  return payload;
+}
+
+/**
+ * 🟢 Session revoke करना
+ */
+export function revokeSession(sessionId: string) {
+  delete sessions[sessionId];
+}

@@ -2,6 +2,7 @@
 // /apps/web/src/lib/crypto.ts
 // Crypto utilities — scrypt password hashing, HMAC signing, secure token
 // हिन्दी comments included. No `any`.
+import crypto from "crypto";
 
 import {
   randomBytes,
@@ -9,28 +10,13 @@ import {
   timingSafeEqual,
 } from "crypto";
 import { promisify } from "util";
-import { createHmac, randomUUID } from "node:crypto"; // ✅ Use node:crypto for ESM/TS
+import { randomUUID } from "node:crypto"; // ✅ Use node:crypto for ESM/TS
 
 
 
 const scrypt = promisify(_scrypt);
 const SCRYPT_KEYLEN = 64;
-const SCRYPT_SALT_BYTES = 16;
 
-/**
- * hashPassword(password) => "salt:derivedHex"
- * हिन्दी: पासवर्ड को scrypt से derive करेंगे और salt के साथ store करेंगे।
- */
-export async function hashPassword(password: string): Promise<string> {
-  const salt = randomBytes(SCRYPT_SALT_BYTES).toString("hex");
-  const derived = (await scrypt(password, salt, SCRYPT_KEYLEN)) as Buffer;
-  return `${salt}:${derived.toString("hex")}`;
-}
-
-/**
- * verifyPassword(stored, candidate) => boolean
- * हिन्दी: stored format salt:hex; candidate पासवर्ड match करें
- */
 export async function verifyPassword(
   stored: string,
   candidate: string
@@ -51,48 +37,75 @@ export async function verifyPassword(
   }
 }
 
+
+
 /** generateToken(bytes) => hex string */
 export function generateToken(bytes = 32): string {
   return randomBytes(bytes).toString("hex");
 }
 
-/**
- * signHmac(payload, secret) => token
- * format: base64url(JSON) + '.' + hex(hmac)
- * हिन्दी: किसी object का HMAC-signed token बनाओ
- */
-
-
-// Sign object with HMAC
-export function signHmac(obj: any, secret: string): string {
-  const payload = JSON.stringify(obj);
-  const hmac = createHmac("sha256", secret).update(payload).digest("hex");
-  const token = Buffer.from(payload).toString("base64") + "." + hmac;
-  return token;
-}
-
-/**
- * verifyHmac(token, secret) => parsed object of type T or throw
- * हिन्दी: token verify करके payload लौटाएगा
- */
-// Verify HMAC and return parsed object
-export function verifyHmac(token: string, secret: string): any {
-  if (!token.includes(".")) throw new Error("Invalid token format");
-  const [b64Payload, hmac] = token.split(".");
-  const payloadStr = Buffer.from(b64Payload, "base64").toString("utf8");
-  const computedHmac = createHmac("sha256", secret).update(payloadStr).digest("hex");
-  if (computedHmac !== hmac) throw new Error("Invalid HMAC signature");
-  try {
-    return JSON.parse(payloadStr);
-  } catch {
-    throw new Error("Invalid JSON payload");
-  }
-}
 
 // Random UUID helper
 export function randomId() {
   return randomUUID();
 }
+
+
+/**
+ * 🔑 Password Hash करना
+ * Hindi: signup के दौरान password को secure hash में convert करता है
+ */
+export async function hashPassword(password: string): Promise<string> {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = crypto
+    .pbkdf2Sync(password, salt, 10000, 64, "sha512")
+    .toString("hex");
+  return `${salt}$${hash}`;
+}
+
+/**
+ * 🔑 Password Compare करना
+ * Hindi: login में user द्वारा दिया password और stored hash match करता है या नहीं
+ */
+export async function comparePassword(
+  password: string,
+  storedHash: string
+): Promise<boolean> {
+  const [salt, originalHash] = storedHash.split("$");
+  const hash = crypto
+    .pbkdf2Sync(password, salt, 10000, 64, "sha512")
+    .toString("hex");
+  return hash === originalHash;
+}
+
+/**
+ * 🔐 HMAC Sign (Session Token)
+ */
+export function signHmac(data: any, secret: string): string {
+  const payload = JSON.stringify(data);
+  return (
+    crypto.createHmac("sha256", secret).update(payload).digest("hex") +
+    "." +
+    Buffer.from(payload).toString("base64")
+  );
+}
+
+/**
+ * 🔐 HMAC Verify (Session Token)
+ */
+export function verifyHmac(token: string, secret: string): any {
+  const parts = token.split(".");
+  if (parts.length !== 2) throw new Error("Invalid token format");
+  const [signature, payloadB64] = parts;
+  const expectedSignature = crypto
+    .createHmac("sha256", secret)
+    .update(Buffer.from(payloadB64, "base64"))
+    .digest("hex");
+  if (signature !== expectedSignature)
+    throw new Error("Invalid token signature");
+  return JSON.parse(Buffer.from(payloadB64, "base64").toString("utf-8"));
+}
+
 
 
 export const cryptoUtils = {
@@ -101,4 +114,5 @@ export const cryptoUtils = {
   generateToken,
   signHmac,
   verifyHmac,
+  randomId,
 };

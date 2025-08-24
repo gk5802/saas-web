@@ -86,3 +86,27 @@ export const logger = {
     return this.log("audit", payload);
   },
 };
+
+/**
+ * 🟢 Logger utility
+ * हिंदी: Console पर structured logs लिखने के लिए
+ */
+
+function format(level: string, source: string, message: string) {
+  return `[${new Date().toISOString()}] [${level}] [web] [${source}] ${message}`;
+}
+
+export function logInfo(source: string, message: string) {
+  console.log(format("INFO", source, message));
+}
+
+export function logError(source: string, error: any) {
+  console.error(format("ERROR", source, error?.message || String(error)));
+}
+
+export function logWarn(source: string, message: string) {
+  console.warn(format("WARN", source, message));
+}
+export function logDebug(source: string, message: string) {
+  console.debug(format("DEBUG", source, message));
+}
