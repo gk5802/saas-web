@@ -1,56 +1,50 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
-import { getUserByEmail } from "@/lib/wkt3db";
+import { findDocuments } from "@/lib/wkt3db";
+import { createSession } from "@/lib/session";
 import { comparePassword } from "@/lib/crypto";
-import { createSession } from "@/lib/authClient";
-import { logInfo, logError } from "@/lib/logger";
 
-/**
- * 🟢 Login API
- * हिंदी: यह API user login handle करती है
- * 1. email से user find करती है
- * 2. password verify करती है
- * 3. session token बनाती है और return करती है
- */
 export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json();
 
-    // ✅ check if user exists
-    const user = await getUserByEmail(email);
-    if (!user) {
+    const users = await findDocuments("users", { email });
+    if (users.length === 0) {
       return NextResponse.json(
         { success: false, message: "Invalid credentials" },
         { status: 401 }
       );
     }
 
-    // ✅ compare password
-    const match = await comparePassword(password, user.passwordHash);
-    if (!match) {
+    const user = users[0];
+    if (!user.verified) {
+      return NextResponse.json(
+        { success: false, message: "Email not verified" },
+        { status: 403 }
+      );
+    }
+
+    const isValid = await comparePassword(password, user.passwordHash);
+    if (!isValid) {
       return NextResponse.json(
         { success: false, message: "Invalid credentials" },
         { status: 401 }
       );
     }
 
-    // ✅ create session
-    const token = await createSession(user.id);
+    if (user.twoFASecret) {
+      return NextResponse.json({ success: true, need_2fa: true });
+    }
 
-    logInfo("auth-login", `User ${user.id} logged in`);
-
-    return NextResponse.json(
-      {
-        success: true,
-        message: "Login successful",
-        sessionToken: token,
-      },
-      { status: 200 }
-    );
+    const session = await createSession(user._id, user.email, user.role);
+    return NextResponse.json({
+      success: true,
+      message: "Login success",
+      session,
+    });
   } catch (err: any) {
-    logError("auth-login", err);
     return NextResponse.json(
-      { success: false, message: "Internal Server Error" },
+      { success: false, message: err.message },
       { status: 500 }
     );
   }

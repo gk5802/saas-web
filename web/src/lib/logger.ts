@@ -3,7 +3,11 @@
 // /apps/web/src/lib/logger.ts
 // Simple structured logger + audit helpers. Writes lightweight logs to console and optionally to wkt3db as audit entries.
 
+// apps/web/src/lib/logger.ts
 import { wkt3dbClient } from "./wkt3db";
+import { insertDocument } from "@/lib/wkt3db";
+
+const APP_NAME = process.env.APP_NAME || "web";
 
 export type LogLevel = "debug" | "info" | "warn" | "error" | "audit";
 
@@ -96,17 +100,56 @@ function format(level: string, source: string, message: string) {
   return `[${new Date().toISOString()}] [${level}] [web] [${source}] ${message}`;
 }
 
-export function logInfo(source: string, message: string) {
-  console.log(format("INFO", source, message));
-}
 
-export function logError(source: string, error: any) {
-  console.error(format("ERROR", source, error?.message || String(error)));
-}
-
-export function logWarn(source: string, message: string) {
-  console.warn(format("WARN", source, message));
-}
 export function logDebug(source: string, message: string) {
   console.debug(format("DEBUG", source, message));
+}
+
+
+
+// log को DB में डालने का helper
+async function logToDb(level: string, message: string, meta?: any) {
+  try {
+    await insertDocument("logs", {
+      timestamp: new Date().toISOString(),
+      app: APP_NAME,
+      level,
+      message,
+      meta: meta || {},
+    });
+  } catch (err) {
+    console.error(`[${new Date().toISOString()}] [ERROR] [${APP_NAME}] logToDb failed`, err);
+  }
+}
+
+// ---------------------
+// Info log
+// ---------------------
+export async function logInfo(message: string, meta?: any) {
+  console.log(`[${new Date().toISOString()}] [INFO] [${APP_NAME}] ${message}`, meta || "");
+  await logToDb("info", message, meta);
+}
+
+// ---------------------
+// Error log
+// ---------------------
+export async function logError(message: string, meta?: any) {
+  console.error(`[${new Date().toISOString()}] [ERROR] [${APP_NAME}] ${message}`, meta || "");
+  await logToDb("error", message, meta);
+}
+
+// ---------------------
+// Warning log
+// ---------------------
+export async function logWarn(message: string, meta?: any) {
+  console.warn(`[${new Date().toISOString()}] [WARN] [${APP_NAME}] ${message}`, meta || "");
+  await logToDb("warn", message, meta);
+}
+
+// ---------------------
+// Audit log (e.g. bet placed, login, signup)
+// ---------------------
+export async function logAudit(message: string, meta?: any) {
+  console.log(`[${new Date().toISOString()}] [AUDIT] [${APP_NAME}] ${message}`, meta || "");
+  await logToDb("audit", message, meta);
 }

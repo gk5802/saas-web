@@ -1,40 +1,32 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
-import { getUserById } from "@/lib/wkt3db";
+import { updateDocument, findDocuments } from "@/lib/wkt3db";
 
-/**
- * 📝 Email Verification API
- * Hindi: जब user verification link पर click करता है, यह route उसका account verified mark करता है
- */
 export async function GET(req: NextRequest) {
   try {
-    const url = new URL(req.url);
-    const userId = url.searchParams.get("userId");
+    const { searchParams } = new URL(req.url);
+    const token = searchParams.get("token");
 
-    if (!userId) {
+    if (!token) {
       return NextResponse.json(
-        { success: false, message: "Missing userId" },
+        { success: false, message: "Missing token" },
         { status: 400 }
       );
     }
 
-    const user = await getUserById(userId);
-    if (!user) {
+    const users = await findDocuments("users", { verificationToken: token });
+    if (users.length === 0) {
       return NextResponse.json(
-        { success: false, message: "Invalid userId" },
-        { status: 404 }
+        { success: false, message: "Invalid or expired token" },
+        { status: 400 }
       );
     }
 
-    if (user.verified) {
-      return NextResponse.json({
-        success: true,
-        message: "User already verified",
-      });
-    }
-
-    // ✅ Email verify कर देना
-    user.verified = true;
+    const user = users[0];
+    await updateDocument("users", user._id, {
+      verified: true,
+      verificationToken: null,
+    });
 
     return NextResponse.json({
       success: true,
@@ -42,7 +34,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (err: any) {
     return NextResponse.json(
-      { success: false, message: "Error: " + err.message },
+      { success: false, message: err.message },
       { status: 500 }
     );
   }
