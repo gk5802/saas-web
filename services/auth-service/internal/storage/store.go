@@ -5,17 +5,18 @@ import (
 	"encoding/hex"
 	"errors"
 	"sync"
+	"time"
 )
 
 // MemoryStore: simple in-memory document store
 type MemoryStore struct {
-	mu   sync.RWMutex
-	data map[string][]map[string]any
+	Mu   sync.RWMutex
+	Data map[string]map[string]map[string]any
 }
 
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
-		data: make(map[string][]map[string]any),
+		Data: make(map[string]map[string]map[string]any),
 	}
 }
 
@@ -25,24 +26,26 @@ func randHex(n int) string {
 	return hex.EncodeToString(b)
 }
 
-// Insert inserts a document into a collection. If doc has no "id", it auto-generates one.
-func (s *MemoryStore) Insert(collection string, doc map[string]any) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// Insert नया document insert करता है
+func (s *MemoryStore) Insert(collection string, doc map[string]any) string {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
 
-	if _, ok := doc["id"]; !ok {
-		doc["id"] = randHex(8)
+	if _, ok := s.Data[collection]; !ok {
+		s.Data[collection] = make(map[string]map[string]any)
 	}
-	s.data[collection] = append(s.data[collection], doc)
+	id := doc["id"].(string)
+	s.Data[collection][id] = doc
+	return id
 }
 
 // FindByField finds the *first* document in a collection where doc[field] == value.
 // Returns (doc, true) if found, otherwise (nil, false).
 func (s *MemoryStore) FindByField(collection, field string, value any) (map[string]any, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.Mu.RLock()
+	defer s.Mu.RUnlock()
 
-	rows, ok := s.data[collection]
+	rows, ok := s.Data[collection]
 	if !ok {
 		return nil, false
 	}
@@ -62,38 +65,38 @@ func (s *MemoryStore) GetByField(collection, field string, value any) (map[strin
 // DeleteByField removes documents where doc[field] == value.
 // It removes **all matching documents** and returns number removed.
 func (s *MemoryStore) DeleteByField(collection, field string, value any) int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
 
-	rows, ok := s.data[collection]
+	rows, ok := s.Data[collection]
 	if !ok || len(rows) == 0 {
 		return 0
 	}
-	newRows := make([]map[string]any, 0, len(rows))
+	newRows := make(map[string]map[string]any, len(rows))
 	removed := 0
-	for _, doc := range rows {
+	for id, doc := range rows {
 		if v, has := doc[field]; has && v == value {
 			removed++
 			continue
 		}
-		newRows = append(newRows, doc)
+		newRows[id] = doc
 	}
-	s.data[collection] = newRows
+	s.Data[collection] = newRows
 	return removed
 }
 
 // Update replaces a document by its id (if exists). Returns error if not found.
 func (s *MemoryStore) Update(collection, id string, newDoc map[string]any) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
 
-	rows, ok := s.data[collection]
+	rows, ok := s.Data[collection]
 	if !ok {
 		return errors.New("collection not found")
 	}
 	for i, d := range rows {
 		if idv, has := d["id"]; has && idv == id {
-			s.data[collection][i] = newDoc
+			s.Data[collection][i] = newDoc
 			return nil
 		}
 	}
@@ -102,10 +105,57 @@ func (s *MemoryStore) Update(collection, id string, newDoc map[string]any) error
 
 // GetAll returns a shallow copy of collection rows (for debug)
 func (s *MemoryStore) GetAll(collection string) []map[string]any {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	rows := s.data[collection]
-	out := make([]map[string]any, len(rows))
-	copy(out, rows)
+	s.Mu.RLock()
+	defer s.Mu.RUnlock()
+	rows := s.Data[collection]
+	out := make([]map[string]any, 0, len(rows))
+	for _, doc := range rows {
+		out = append(out, doc)
+	}
 	return out
+}
+// ✅ Get: किसी collection से id के आधार पर doc fetch
+func (s *MemoryStore) Get(collection, id string) (map[string]any, bool) {
+	s.Mu.RLock()
+	defer s.Mu.RUnlock()
+
+	col, ok := s.Data[collection]
+	if !ok {
+		return nil, false
+	}
+	doc, ok := col[id]
+	return doc, ok
+}
+
+// ✅ Delete: किसी collection से id के आधार पर doc delete
+func (s *MemoryStore) Delete(collection, id string) bool {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
+
+	col, ok := s.Data[collection]
+	if !ok {
+		return false
+	}
+	if _, exists := col[id]; !exists {
+		return false
+	}
+	delete(col, id)
+	return true
+}
+
+// Expired sessions cleanup (optional utility)
+func (s *MemoryStore) CleanupExpiredSessions() {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
+
+	sessions, ok := s.Data["sessions"]
+	if !ok {
+		return
+	}
+	now := time.Now()
+	for id, session := range sessions {
+		if exp, ok := session["expiry"].(time.Time); ok && now.After(exp) {
+			delete(sessions, id)
+		}
+	}
 }

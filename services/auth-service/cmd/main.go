@@ -14,7 +14,7 @@ func main() {
 	http.HandleFunc("/signup", handlers.SignupHandler(store))
 	http.HandleFunc("/login", handlers.LoginHandler(store))
 	http.HandleFunc("/logout", handlers.LogoutHandler(store))
-	http.HandleFunc("/protected", handlers.ProtectedHandler(store))
+	http.HandleFunc("/protected", handlers.ProtectedHandler)
 
 	fmt.Println("🚀 Auth service running on :8080")
 	http.ListenAndServe(":8080", nil)
