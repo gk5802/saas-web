@@ -1,12 +1,11 @@
 package storage
 
 import (
-	"errors"
 	"sync"
 )
 
 type MemoryStore struct {
-	mu   sync.Mutex
+	mu   sync.RWMutex
 	data map[string][]map[string]any
 }
 
@@ -16,47 +15,41 @@ func NewMemoryStore() *MemoryStore {
 	}
 }
 
-
-func (s *MemoryStore) GetUserByEmail(email string) (map[string]any, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	users := s.data["users"]
-	for _, u := range users {
-		if u["email"] == email {
-			return u, nil
-		}
-	}
-	return nil, errors.New("user not found")
-}
-// Insert a new document
 func (s *MemoryStore) Insert(collection string, doc map[string]any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.data[collection] = append(s.data[collection], doc)
 }
 
-// Get documents by field
-func (s *MemoryStore) GetByField(collection, field string, value any) []map[string]any {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	results := []map[string]any{}
-	for _, doc := range s.data[collection] {
-		if doc[field] == value {
-			results = append(results, doc)
+func (s *MemoryStore) FindByField(collection, field string, value any) (map[string]any, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rows, ok := s.data[collection]
+	if !ok {
+		return nil, false
+	}
+	for _, doc := range rows {
+		if v, has := doc[field]; has && v == value {
+			return doc, true
 		}
 	}
-	return results
+	return nil, false
 }
 
-// Delete documents by field
+// backward-compatible alias
+func (s *MemoryStore) GetByField(collection, field string, value any) (map[string]any, bool) {
+	return s.FindByField(collection, field, value)
+}
+
 func (s *MemoryStore) DeleteByField(collection, field string, value any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	newDocs := []map[string]any{}
-	for _, doc := range s.data[collection] {
-		if doc[field] != value {
-			newDocs = append(newDocs, doc)
+	rows := s.data[collection]
+	filtered := []map[string]any{}
+	for _, doc := range rows {
+		if v, has := doc[field]; !has || v != value {
+			filtered = append(filtered, doc)
 		}
 	}
-	s.data[collection] = newDocs
+	s.data[collection] = filtered
 }

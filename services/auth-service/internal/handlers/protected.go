@@ -7,7 +7,7 @@ import (
 	"wkt3.com/auth-service/internal/storage"
 )
 
-func LogoutHandler(store *storage.MemoryStore) http.HandlerFunc {
+func ProtectedHandler(store *storage.MemoryStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := r.Header.Get("Authorization")
 		if token == "" {
@@ -15,11 +15,14 @@ func LogoutHandler(store *storage.MemoryStore) http.HandlerFunc {
 			return
 		}
 
-		store.DeleteByField("sessions", "token", token)
+		if _, found := store.FindByField("sessions", "token", token); !found {
+			http.Error(w, "invalid token", http.StatusUnauthorized)
+			return
+		}
 
 		json.NewEncoder(w).Encode(map[string]any{
 			"success": true,
-			"message": "logged out",
+			"message": "you are authorized",
 		})
 	}
 }

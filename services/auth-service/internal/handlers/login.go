@@ -10,29 +10,23 @@ import (
 
 func LoginHandler(store *storage.MemoryStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
+		var body struct {
 			Email    string `json:"email"`
 			Password string `json:"password"`
 		}
-
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			http.Error(w, "invalid request", http.StatusBadRequest)
 			return
 		}
 
-		user, err := store.GetUserByEmail(req.Email)
-		if err != nil {
+		user, found := store.FindByField("users", "email", body.Email)
+		if !found {
 			http.Error(w, "invalid credentials", http.StatusUnauthorized)
 			return
 		}
 
-		if verified, _ := user["verified"].(bool); !verified {
-			http.Error(w, "email not verified", http.StatusForbidden)
-			return
-		}
-
 		hash, ok := user["password_hash"].(string)
-		if !ok || !utils.CheckPassword(req.Password, hash) {
+		if !ok || !utils.CheckPassword(hash, body.Password) {
 			http.Error(w, "invalid credentials", http.StatusUnauthorized)
 			return
 		}
@@ -44,10 +38,8 @@ func LoginHandler(store *storage.MemoryStore) http.HandlerFunc {
 		}
 		store.Insert("sessions", session)
 
-		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
 			"success": true,
-			"message": "Login successful",
 			"token":   token,
 		})
 	}
